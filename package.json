@@ -1,0 +1,34 @@
+{
+  "name": "sparkprophet",
+  "version": "1.0.0",
+  "description": "Example python script running FBProphet on Apache Spark",
+  "main": "sparkprophet.py",
+  "dependencies": {
+    "all-contributors-cli": "^5.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "contributors:add": "all-contributors add",
+    "contributors:generate": "all-contributors generate"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asidlo/sparkprophet.git"
+  },
+  "keywords": [
+    "spark",
+    "facebook",
+    "prophet",
+    "python",
+    "rdd",
+    "example",
+    "tutorial",
+    "pyspark"
+  ],
+  "author": "Andrew Sidlo",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/asidlo/sparkprophet/issues"
+  },
+  "homepage": "https://github.com/asidlo/sparkprophet#readme"
+}
