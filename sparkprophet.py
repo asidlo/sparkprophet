@@ -219,7 +219,7 @@ if __name__ == '__main__':
     df = retrieve_data()
 
     # Can subset the data by uncommenting the following line and editing array
-    df = df[df.app.isin(['a'])]
+    # df = df[df.app.isin(['a'])]
 
     # Group data by app and metric_type to aggregate data for each app-metric combo
     df = df.groupBy('app', 'metric')
