@@ -2,14 +2,12 @@
 
 import numpy as np
 import pandas as pd
+from fbprophet import Prophet
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
-from pyspark.sql.types import FloatType, StructField, StructType, StringType, TimestampType
 from pyspark.sql.functions import collect_list, struct
-
+from pyspark.sql.types import FloatType, StructField, StructType, StringType, TimestampType
 from sklearn.metrics import mean_squared_error
-
-from fbprophet import Prophet
 
 changepoint_prior_scale = 0.005
 seasonality_prior_scale = 0.05
@@ -17,11 +15,11 @@ changepoint_range = 0.5
 
 
 def retrieve_data():
-    """Load sample data from ./data/input.csv as a pyspark.sql.DataFrame."""
+    """Load sample data from ./data/original-input.csv as a pyspark.sql.DataFrame."""
     df = (spark.read
           .option("header", "true")
           .option("inferSchema", value=True)
-          .csv("./data/input2.csv"))
+          .csv("./data/input.csv"))
 
     # Drop any null values incase they exist
     df = df.dropna()
@@ -30,8 +28,8 @@ def retrieve_data():
     df = df.select(
         df['timestamp'].alias('ds'),
         df['app'],
-        df['total'].cast(FloatType()).alias('y'),
-        df['metric_type']
+        df['value'].cast(FloatType()).alias('y'),
+        df['metric']
     )
 
     return df
@@ -41,21 +39,21 @@ def transform_data(row):
     """Transform data from pyspark.sql.Row to python dict to be used in rdd."""
     data = row['data']
     app = row['app']
-    mt = row['metric_type']
+    mt = row['metric']
 
-    # # Transform [pyspark.sql.Dataframe.Row] -> [dict]
-    # data_dicts = []
-    # for d in data:
-    #     data_dicts.append(d.asDict())
+    # Transform [pyspark.sql.Dataframe.Row] -> [dict]
+    data_dicts = []
+    for d in data:
+        data_dicts.append(d.asDict())
 
-    # # Convert into pandas dataframe for fbprophet
-    # data = pd.DataFrame(data_dicts)
-    # data['ds'] = pd.to_datetime(data['ds'])
+    # Convert into pandas dataframe for fbprophet
+    data = pd.DataFrame(data_dicts)
+    data['ds'] = pd.to_datetime(data['ds'])
 
     return {
         'app': app,
-        'metric_type': mt,
-        # 'data': data
+        'metric': mt,
+        'data': data
     }
 
 
@@ -166,7 +164,7 @@ def calc_error(d):
 def reduce_data_scope(d):
     """Return a tuple (app + , + metric_type, {})."""
     return (
-        d['app'] + ',' + d['metric_type'],
+        d['app'] + ',' + d['metric'],
         {
             'forecast': d['forecast'],
             'mse': d['mse'],
@@ -202,7 +200,6 @@ def expand_predictions(d):
 
 
 if __name__ == '__main__':
-
     conf = (SparkConf()
             .setMaster("local[*]")
             .setAppName("SparkFBProphet Example"))
@@ -216,22 +213,22 @@ if __name__ == '__main__':
     # Doesnt remove logs before/during session creation
     # To edit more logging you will need to set in log4j.properties on cluster
     sc = spark.sparkContext
-    sc.setLogLevel("ERROR")
+    sc.setLogLevel("INFO")
 
     # Retrieve data from local csv datastore
     df = retrieve_data()
 
     # Can subset the data by uncommenting the following line and editing array
-    df = df[df.app.isin(['app_0'])]
+    df = df[df.app.isin(['a'])]
 
     # Group data by app and metric_type to aggregate data for each app-metric combo
-    df = df.groupBy('app', 'metric_type')
+    df = df.groupBy('app', 'metric')
     df = df.agg(collect_list(struct('ds', 'y')).alias('data'))
 
     df = (df.rdd
           .map(lambda r: transform_data(r))
           .map(lambda d: partition_data(d))
-        # prophet cant handle data with < 2 training examples
+          # prophet cant handle data with < 2 training examples
           .filter(lambda d: len(d['train_data']) > 2)
           .map(lambda d: create_model(d))
           .map(lambda d: train_model(d))
@@ -243,9 +240,9 @@ if __name__ == '__main__':
           .map(lambda d: reduce_data_scope(d))
           .flatMap(lambda d: expand_predictions(d)))
 
-    schema= StructType([
+    schema = StructType([
         StructField("app", StringType(), True),
-        StructField("metric_type", StringType(), True),
+        StructField("metric", StringType(), True),
         StructField("ds", TimestampType(), True),
         StructField("yhat", FloatType(), True),
         StructField("yhat_lower", FloatType(), True),
@@ -253,7 +250,7 @@ if __name__ == '__main__':
         StructField("mse", FloatType(), True)
     ])
 
-    df= spark.createDataFrame(df, schema)
+    df = spark.createDataFrame(df, schema)
     df.write.options(header=True).csv('./data/output', mode='overwrite')
 
     spark.stop()
